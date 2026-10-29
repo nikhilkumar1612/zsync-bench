@@ -23,6 +23,7 @@ mode, it reads a finalized immutable dataset.
 
 The project is in its specification phase. The initial contracts are:
 
+- [Project plan](PROJECT_PLAN.md)
 - [System contract](docs/system-contract.md)
 - [Event interface](docs/event-interface.md)
 - [Benchmark specification](docs/benchmark-spec.md)
