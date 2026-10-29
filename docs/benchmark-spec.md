@@ -1,6 +1,6 @@
 # Benchmark Specification
 
-Status: Draft 0.1
+Status: Accepted 1.0
 
 This document defines what `zsync-bench` will measure and the controls required
 for a fair Go/Zig comparison.
@@ -9,11 +9,12 @@ for a fair Go/Zig comparison.
 
 The benchmark answers:
 
-> Does Zig provide a material, reproducible advantage over Go for the Zcash
-> compact-block indexing and wallet synchronization path under equivalent
-> behavior and resource constraints?
+> How does each Go or Zig indexer run behave for the Zcash compact-block
+> indexing and wallet synchronization path under controlled conditions?
 
-Results do not establish complete `lightwalletd` suitability.
+Results do not establish complete `lightwalletd` suitability. Reports present
+metrics for individual runs without scoring implementations, declaring a
+winner, or issuing a language recommendation.
 
 ## 2. Correctness gate
 
@@ -147,6 +148,10 @@ The implementations should run separately for primary results. Running them
 simultaneously on one host is diagnostic because shared CPU, cache, storage, and
 scheduler contention can bias the comparison.
 
+The primary comparison uses the same logical and physical index storage design
+for both implementations. Language-specific alternatives may be measured only
+as separately labeled experiments.
+
 ## 7. Build and run disclosure
 
 Every result bundle records:
@@ -171,19 +176,16 @@ in the raw result set and is classified rather than silently discarded.
 Reports include distributions and confidence intervals where the sample count
 supports them. Best-of-N results are not acceptable as the primary comparison.
 
-## 9. Initial continuation criteria
+## 9. Reporting policy
 
-Before seeing results, the project should choose the improvement considered
-large enough to justify further Zig investment. Candidate material thresholds
-include one or more of:
+Reports contain the measured values, run configuration, raw samples, and
+correctness status for each individual run. The reporting layer MUST NOT rank
+languages, calculate a composite score, apply pass/fail performance thresholds,
+or identify a winner.
 
-- At least 25% lower memory per active stream.
-- At least 20% lower p99 completion latency under high concurrency.
-- At least 30% higher throughput under the same CPU and memory budget.
-
-These values are provisional until maintainers approve them. The final decision
-must consider implementation complexity, correctness, operational maturity, and
-maintenance cost alongside speed.
+Cross-run tables and plots MAY place metrics side by side when their environment
+and workload controls match. Any interpretation remains outside the benchmark
+artifact.
 
 ## 10. Benchmark acceptance criteria
 
@@ -201,7 +203,6 @@ The benchmark framework is accepted when another developer can:
 - Exact dataset windows and sizes.
 - Wallet concurrency levels for the standard suite.
 - Duration of the live stability test.
-- Statistical confidence and regression thresholds.
+- Statistical summaries and confidence-interval method.
 - Cross-host versus same-host replay deployment.
 - Tooling used for process and kernel-level measurements.
-- Final material-advantage thresholds.

@@ -104,8 +104,8 @@ Verification:
 - Open architectural decisions have explicit resolutions or belong to a named
   later work item.
 
-Status: specification drafted; accepted decisions must be incorporated before
-the work item is marked complete.
+Status: complete. The contracts are accepted as version 1.0 and incorporate the
+architectural decisions above.
 
 ## Work item 2: Dataset and immutable event-log format
 
@@ -130,6 +130,9 @@ Verification:
 - An independent validator reconstructs the canonical tip after every event.
 - Every payload checksum and parent relationship validates.
 - Go and Zig readers produce identical normalized events.
+
+Status: in progress. The v1 on-disk format, event protobuf, and manifest schema
+have initial drafts pending validator implementation and fixture review.
 
 ## Work item 3: Zebra Testnet recorder
 

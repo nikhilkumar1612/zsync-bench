@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/zsync-bench/manifest-v1.schema.json",
+  "title": "zsync-bench dataset manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_major",
+    "schema_minor",
+    "dataset_id",
+    "network",
+    "created_at",
+    "finalized",
+    "initial_anchor",
+    "first_event_sequence",
+    "limits"
+  ],
+  "properties": {
+    "format": { "const": "zsync-bench-dataset" },
+    "schema_major": { "const": 1 },
+    "schema_minor": { "const": 0 },
+    "dataset_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "parent_dataset_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "network": { "const": "zcash-testnet" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "finalized_at": { "type": "string", "format": "date-time" },
+    "finalized": { "type": "boolean" },
+    "initial_anchor": { "$ref": "#/$defs/chainTip" },
+    "first_event_sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_event_payload_bytes",
+        "max_raw_block_bytes",
+        "max_reorg_depth"
+      ],
+      "properties": {
+        "max_event_payload_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 16777216
+        },
+        "max_raw_block_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1073741824
+        },
+        "max_reorg_depth": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "final": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_count",
+        "final_event_sequence",
+        "final_tip",
+        "events_byte_length",
+        "events_sha256",
+        "block_object_count",
+        "block_set_sha256"
+      ],
+      "properties": {
+        "event_count": { "type": "integer", "minimum": 1 },
+        "final_event_sequence": { "type": "integer", "minimum": 0 },
+        "final_tip": { "$ref": "#/$defs/chainTip" },
+        "events_byte_length": { "type": "integer", "minimum": 16 },
+        "events_sha256": { "$ref": "#/$defs/sha256" },
+        "block_object_count": { "type": "integer", "minimum": 0 },
+        "block_set_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "finalized": { "const": true } },
+        "required": ["finalized"]
+      },
+      "then": {
+        "required": ["finalized_at", "final"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "required": ["finalized_at"] },
+            { "required": ["final"] }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "chainTip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "hash"],
+      "properties": {
+        "height": { "type": "integer", "minimum": 0 },
+        "hash": { "$ref": "#/$defs/hash32" }
+      }
+    }
+  }
+}

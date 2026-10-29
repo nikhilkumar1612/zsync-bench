@@ -21,15 +21,15 @@ mode, it reads a finalized immutable dataset.
 
 ## Current status
 
-The project is in its specification phase. The initial contracts are:
+Work Item 1, the system and benchmark contract, is accepted as version 1.0:
 
 - [Project plan](PROJECT_PLAN.md)
 - [System contract](docs/system-contract.md)
 - [Event interface](docs/event-interface.md)
 - [Benchmark specification](docs/benchmark-spec.md)
 
-Implementation starts only after the acceptance checklist in the system
-contract has been reviewed.
+Work Item 2, the versioned dataset and immutable event-log format, is now in
+progress. See [Dataset Format v1](docs/dataset-format.md).
 
 ## Initial scope
 

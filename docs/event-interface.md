@@ -1,6 +1,6 @@
 # Event Interface
 
-Status: Logical contract, Draft 0.1
+Status: Logical contract, Accepted 1.0
 
 This document specifies the language-neutral events consumed by both indexers.
 It deliberately does not choose the on-disk or transport encoding.
@@ -165,7 +165,19 @@ Before events, replay sends a logical handshake containing:
 The consumer must reject unsupported schema or network values before accepting
 the first event.
 
-## 8. Acknowledgement
+## 8. Initial transport and block delivery
+
+The initial transport is a framed bidirectional stream over the child indexer
+process's stdin and stdout. Replay writes handshake and event frames to stdin;
+the indexer writes acknowledgement and diagnostic frames to stdout. Human logs
+must use stderr so they cannot corrupt the protocol stream.
+
+Chain events carry a block content key and immutable block metadata. Raw block
+bytes are not embedded in each control event. The indexer resolves the content
+key from the shared dataset and verifies its length, checksum, and parsed block
+identity before applying the event.
+
+## 9. Acknowledgement
 
 An indexer acknowledges the highest contiguous event sequence for which its
 resulting canonical state is durable.
@@ -175,7 +187,7 @@ events after the last acknowledged sequence. Event application must therefore
 be idempotent for an identical already-applied sequence and fatal for the same
 sequence with different content.
 
-## 9. Replay completion and waiting
+## 10. Replay completion and waiting
 
 In fixed mode, replay emits a clean end-of-stream only after
 `DatasetFinalized`.
@@ -184,7 +196,7 @@ In live mode, reaching the latest committed event is not end-of-stream. Replay
 waits for a new committed event, emits a transport-level heartbeat if required,
 or terminates only by cancellation, fatal error, or operator shutdown.
 
-## 10. Event-interface conformance
+## 11. Event-interface conformance
 
 A conforming consumer must pass fixtures for:
 

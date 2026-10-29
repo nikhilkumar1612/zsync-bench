@@ -1,6 +1,6 @@
 # System Contract
 
-Status: Draft 0.1
+Status: Accepted 1.0
 
 This document defines the boundaries and observable behavior of the first
 `zsync-bench` experiment. The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY
@@ -73,6 +73,11 @@ It MUST:
 - Record a run manifest that identifies the exact inputs and configuration.
 
 It MUST NOT transform raw Zcash blocks into compact blocks.
+
+The initial implementation MUST use a framed stdin/stdout transport. The replay
+harness launches one indexer process, sends event frames, and reads durable
+acknowledgements. Events carry block metadata and a content key; indexers load
+the referenced immutable raw bytes from the shared dataset.
 
 ### 2.4 Indexers
 
@@ -153,8 +158,17 @@ Both implementations MUST agree on:
 - Deadline and cancellation propagation.
 - Behavior when a reorganization affects a stream in progress.
 
+If a canonical reorganization intersects the range of an active
+`GetBlockRange` stream, the server MUST abort that stream with gRPC status
+`Unavailable`. It MUST NOT continue the response using blocks from a different
+branch.
+
 The exact protobuf revision and normalized comparison rules will be finalized
 with the compact-block conformance fixtures.
+
+Implementation MUST pin the latest stable tagged revision of the canonical
+`zcash/lightwallet-protocol` available when that work begins and record its tag
+and commit hash in the repository.
 
 ## 5. Compact-block equivalence
 
@@ -203,6 +217,10 @@ Both indexers MUST accept equivalent configuration for:
 - Event ingestion queue capacity.
 - Storage location.
 - Shutdown deadline.
+
+The primary comparison MUST use the same logical and physical storage design in
+both indexers. Any later language-specific storage experiment must be reported
+separately and must not replace the primary results.
 
 All queues MUST be bounded. A disconnected or cancelled wallet MUST stop causing
 new storage and serialization work within a measurable cancellation interval.
@@ -270,15 +288,29 @@ Work Item 1 is accepted when reviewers can answer yes to all of the following:
 - Example event sequences cover ordinary growth, restart, and reorganization.
 - Open decisions are listed rather than silently assumed.
 
-## 12. Open decisions
+This checklist was accepted with the decisions recorded below.
 
-The following decisions belong to later work items and remain intentionally
-open:
+## 12. Accepted decisions
+
+1. Events carry block metadata and a content key; raw block bytes are loaded
+   from the shared immutable dataset.
+2. Initial replay transport is framed stdin/stdout.
+3. A reorganization intersecting an active range aborts it with `Unavailable`.
+4. Both indexers use the same storage design for the primary comparison.
+5. Reported performance runs execute indexers separately. Simultaneous runs are
+   correctness diagnostics only.
+6. The canonical light-wallet protocol is pinned to the latest stable tag when
+   implementation begins, including its commit hash.
+7. Reports provide metrics for each run and do not score implementations or
+   declare a language winner.
+8. The recorder and replay harness are implemented in Go.
+
+## 13. Decisions assigned to later work items
+
+The following format and implementation choices remain intentionally open until
+their named work items:
 
 1. On-disk framing and serialization of the dataset.
-2. Whether block bytes are pushed through the event stream or resolved by hash.
-3. Local replay transport: stdin framing, Unix socket, or loopback TCP.
-4. Index storage engine and physical layout.
-5. Exact upstream light-wallet protobuf revision.
-6. In-progress range behavior when its canonical range is reorganized.
-7. Whether simultaneous Go/Zig execution is diagnostic-only or a reported test.
+2. Exact shared storage engine and physical layout.
+3. Exact protocol tag selected when compact-block implementation begins.
+4. Normalization rules for semantically equivalent protobuf encodings.
