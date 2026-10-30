@@ -28,8 +28,9 @@ Work Item 1, the system and benchmark contract, is accepted as version 1.0:
 - [Event interface](docs/event-interface.md)
 - [Benchmark specification](docs/benchmark-spec.md)
 
-Work Item 2, the versioned dataset and immutable event-log format, is now in
-progress. See [Dataset Format v1](docs/dataset-format.md).
+Work Item 2, the versioned dataset and immutable event-log format, is accepted
+as version 1.0. See [Dataset Format v1](docs/dataset-format.md). The next
+milestone is Work Item 3: the Zebra Testnet recorder.
 
 ## Initial scope
 

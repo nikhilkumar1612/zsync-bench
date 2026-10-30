@@ -1,6 +1,6 @@
 # Dataset Format v1
 
-Status: Draft 0.1 for Work Item 2
+Status: Accepted 1.0
 
 This document defines the portable dataset consumed by the replay harness and
 both indexers. It turns the logical contract in `event-interface.md` into a
@@ -42,11 +42,10 @@ that escape the dataset root.
 ## 3. Common encodings
 
 - Integers in binary frame headers are unsigned little-endian.
-- Protobuf fields use the encoding defined by Protocol Buffers version 3.
 - JSON is UTF-8 without a byte-order mark.
 - Human-readable hashes use lowercase hexadecimal.
 - Zcash block hashes and parent hashes use canonical display order in JSON,
-  paths, and protobuf byte fields.
+  paths, and event fields.
 - Timestamps are signed Unix nanoseconds in event messages and RFC 3339 strings
   in the human-readable manifest.
 - SHA-256 is the dataset integrity hash.
@@ -105,16 +104,16 @@ Each event follows the file header as one frame:
 | ---: | --- |
 | 4 | Frame payload length |
 | 8 | Event sequence |
-| N | Serialized `EventEnvelope` protobuf |
+| N | UTF-8 JSON `EventEnvelope` |
 | 32 | SHA-256 frame digest |
 
 The frame digest is SHA-256 over:
 
 ```text
-payload_length_le || sequence_le || protobuf_payload
+payload_length_le || sequence_le || json_payload
 ```
 
-`payload_length` is the protobuf payload length and must not exceed the
+`payload_length` is the JSON payload length and must not exceed the
 manifest's `max_event_payload_bytes`. The sequence in the frame header must
 equal the sequence inside `EventEnvelope`.
 
@@ -137,20 +136,22 @@ or overflow is fatal.
 
 ## 7. Event schema
 
-The concrete event messages are defined in:
+The concrete event messages conform to:
 
 ```text
-proto/zsync/dataset/v1/events.proto
+schema/event-v1.schema.json
 ```
 
 The envelope includes schema version, dataset ID, network, sequence, recorder
-timestamp, event variant, and a payload checksum.
+timestamp, event kind, payload object, and payload checksum. The payload
+checksum is SHA-256 over the exact UTF-8 bytes of the `payload` JSON value as it
+appears in the envelope.
 
 `BlockObserved` establishes the immutable raw block object. Connect and
 disconnect events repeat the block reference so a reader can validate chain
 transitions without searching earlier arbitrary event payloads.
 
-Unknown event variants are fatal in v1 because silently skipping a chain-state
+Unknown event kinds are fatal in v1 because silently skipping a chain-state
 transition would invalidate all following state.
 
 ## 8. Manifest
@@ -254,6 +255,10 @@ Readers enforce payload and block limits before allocation. A reorganization
 deeper than the configured recorder policy stops recording with a diagnostic;
 it is never silently truncated.
 
+V1 imposes a hard raw-block maximum of 2,097,152 bytes, matching the Zcash P2P
+message payload limit. A manifest may select a smaller limit but not a larger
+one. See ZIP 204: `https://zips.z.cash/zip-0204`.
+
 ## 15. Validation requirements
 
 The Work Item 2 validator must verify:
@@ -275,10 +280,50 @@ The Work Item 2 validator must verify:
 It emits a machine-readable validation report and exits non-zero for any
 integrity failure.
 
-## 16. Remaining Work Item 2 decisions
+## 16. Accepted v1 boundaries
 
-- Exact maximum defaults for event and raw block sizes.
-- Whether v1 needs an optional block compression feature.
-- Exact recorder-checkpoint JSON schema.
-- Whether compact-state anchor fixtures belong inside this package or in the
-  later compact-block conformance corpus.
+- Size limits are explicit per-dataset manifest values. Recorder defaults are a
+  Work Item 3 configuration choice rather than part of the format.
+- V1 raw blocks are uncompressed. A future compression feature requires a new
+  minor schema version and an explicit capability flag.
+- Recorder checkpoint state is operational state owned by Work Item 3 and is
+  excluded from finalized dataset identity.
+- Compact-state anchor fixtures belong to the Work Item 5 conformance corpus.
+
+## 17. Reference implementation
+
+The Go reference implementation is in `internal/dataset`. It provides the
+versioned frame reader and writer, raw block publication, Zcash header identity
+checks, canonical-chain validation, finalization checks, and deterministic
+synthetic fixtures.
+
+The independent Zig frame reader is in `zig/dataset_reader.zig`. It validates
+the file header, frame boundaries, SHA-256 frame digests, JSON envelope shape,
+and frame/envelope sequence agreement, then emits the same normalized event
+summary as the Go reader.
+
+Run its tests with:
+
+```text
+go test ./...
+```
+
+Generate and validate inspectable fixtures with:
+
+```text
+go run ./cmd/zsync-dataset fixture linear /tmp/zsync-linear
+go run ./cmd/zsync-dataset validate /tmp/zsync-linear
+
+go run ./cmd/zsync-dataset fixture reorg /tmp/zsync-reorg
+go run ./cmd/zsync-dataset validate /tmp/zsync-reorg
+
+go run ./cmd/zsync-dataset events /tmp/zsync-reorg > /tmp/go-events.txt
+zig build run -- /tmp/zsync-reorg > /tmp/zig-events.txt
+diff -u /tmp/go-events.txt /tmp/zig-events.txt
+```
+
+Run the complete format, fixture, and reader-parity checks with:
+
+```text
+bash scripts/check-dataset-format.sh
+```

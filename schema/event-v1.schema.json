@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zsync-bench:schema:event:1.0",
+  "title": "zsync-bench event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_major",
+    "schema_minor",
+    "dataset_id",
+    "network",
+    "sequence",
+    "recorded_at_unix_nanos",
+    "kind",
+    "payload",
+    "payload_sha256"
+  ],
+  "properties": {
+    "schema_major": { "const": 1 },
+    "schema_minor": { "const": 0 },
+    "dataset_id": { "type": "string", "format": "uuid" },
+    "network": { "const": "zcash-testnet" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "recorded_at_unix_nanos": { "type": "integer" },
+    "kind": {
+      "enum": [
+        "source_started",
+        "source_stopped",
+        "source_unavailable",
+        "source_recovered",
+        "block_observed",
+        "block_connected",
+        "block_disconnected",
+        "tip_changed",
+        "dataset_finalized"
+      ]
+    },
+    "payload": { "type": "object" },
+    "payload_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "source_started" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/sourceStarted" } } } },
+    { "if": { "properties": { "kind": { "const": "source_stopped" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/sourceStopped" } } } },
+    { "if": { "properties": { "kind": { "const": "source_unavailable" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/sourceUnavailable" } } } },
+    { "if": { "properties": { "kind": { "const": "source_recovered" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/sourceRecovered" } } } },
+    { "if": { "properties": { "kind": { "const": "block_observed" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/blockEvent" } } } },
+    { "if": { "properties": { "kind": { "const": "block_connected" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/blockEvent" } } } },
+    { "if": { "properties": { "kind": { "const": "block_disconnected" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/blockEvent" } } } },
+    { "if": { "properties": { "kind": { "const": "tip_changed" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/tipEvent" } } } },
+    { "if": { "properties": { "kind": { "const": "dataset_finalized" } }, "required": ["kind"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/datasetFinalized" } } } }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "hash32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "chainTip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "hash"],
+      "properties": {
+        "height": { "type": "integer", "minimum": 0 },
+        "hash": { "$ref": "#/$defs/hash32" }
+      }
+    },
+    "blockRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "hash", "parent_hash", "block_time_unix_seconds", "content_key", "raw_payload_sha256", "raw_payload_length"],
+      "properties": {
+        "height": { "type": "integer", "minimum": 0 },
+        "hash": { "$ref": "#/$defs/hash32" },
+        "parent_hash": { "$ref": "#/$defs/hash32" },
+        "block_time_unix_seconds": { "type": "integer", "minimum": 0 },
+        "content_key": { "type": "string", "pattern": "^blocks/[0-9a-f]{2}/[0-9a-f]{62}\\.raw$" },
+        "raw_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "raw_payload_length": { "type": "integer", "minimum": 1, "maximum": 2097152 }
+      }
+    },
+    "blockEvent": {
+      "type": "object", "additionalProperties": false, "required": ["block"],
+      "properties": { "block": { "$ref": "#/$defs/blockRef" } }
+    },
+    "tipEvent": {
+      "type": "object", "additionalProperties": false, "required": ["tip"],
+      "properties": { "tip": { "$ref": "#/$defs/chainTip" } }
+    },
+    "sourceStarted": {
+      "type": "object", "additionalProperties": false, "required": ["session_id", "recorder_version", "zebra_endpoint_id"],
+      "properties": { "session_id": { "type": "string", "minLength": 1 }, "recorder_version": { "type": "string", "minLength": 1 }, "zebra_endpoint_id": { "type": "string", "minLength": 1 } }
+    },
+    "sourceStopped": {
+      "type": "object", "additionalProperties": false, "required": ["session_id", "reason"],
+      "properties": { "session_id": { "type": "string", "minLength": 1 }, "reason": { "type": "string", "minLength": 1 } }
+    },
+    "sourceUnavailable": {
+      "type": "object", "additionalProperties": false, "required": ["category", "diagnostic"],
+      "properties": { "category": { "enum": ["connection", "timeout", "rate_limit", "invalid_response", "source_not_ready"] }, "diagnostic": { "type": "string" } }
+    },
+    "sourceRecovered": {
+      "type": "object", "additionalProperties": false, "required": ["unavailable_since_unix_nanos"],
+      "properties": { "unavailable_since_unix_nanos": { "type": "integer" } }
+    },
+    "datasetFinalized": {
+      "type": "object", "additionalProperties": false, "required": ["final_sequence", "final_tip", "block_object_count", "block_set_sha256"],
+      "properties": {
+        "final_sequence": { "type": "integer", "minimum": 0 },
+        "final_tip": { "$ref": "#/$defs/chainTip" },
+        "block_object_count": { "type": "integer", "minimum": 0 },
+        "block_set_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

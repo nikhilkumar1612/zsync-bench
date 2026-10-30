@@ -131,8 +131,10 @@ Verification:
 - Every payload checksum and parent relationship validates.
 - Go and Zig readers produce identical normalized events.
 
-Status: in progress. The v1 on-disk format, event protobuf, and manifest schema
-have initial drafts pending validator implementation and fixture review.
+Status: complete. Dataset Format v1 is accepted with a Go reader, writer and
+validator, deterministic linear and reorganization fixtures, corruption tests,
+an independent Zig frame reader, and automated Go/Zig normalized-event parity
+checks.
 
 ## Work item 3: Zebra Testnet recorder
 

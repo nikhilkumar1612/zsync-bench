@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/zsync-bench/manifest-v1.schema.json",
+  "$id": "urn:zsync-bench:schema:manifest:1.0",
   "title": "zsync-bench dataset manifest v1",
   "type": "object",
   "additionalProperties": false,
@@ -54,7 +54,7 @@
         "max_raw_block_bytes": {
           "type": "integer",
           "minimum": 1024,
-          "maximum": 1073741824
+          "maximum": 2097152
         },
         "max_reorg_depth": {
           "type": "integer",
