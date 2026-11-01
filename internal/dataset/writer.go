@@ -19,6 +19,13 @@ type Writer struct {
 	closed   bool
 }
 
+type ResumeState struct {
+	Manifest     Manifest
+	Tip          ChainTip
+	Canonical    map[uint64]BlockRef
+	LastSequence uint64
+}
+
 func Create(root, datasetID string, anchor ChainTip, limits Limits, createdAt time.Time) (*Writer, error) {
 	if err := os.MkdirAll(filepath.Join(root, "blocks"), 0o755); err != nil {
 		return nil, err
@@ -45,6 +52,56 @@ func Create(root, datasetID string, anchor ChainTip, limits Limits, createdAt ti
 	}
 	return &Writer{root: root, manifest: manifest, log: logFile, next: manifest.FirstEventSequence, observed: map[string]BlockRef{}}, nil
 }
+
+func OpenAppend(root string) (*Writer, ResumeState, error) {
+	manifest, err := readManifest(filepath.Join(root, "manifest.json"))
+	if err != nil {
+		return nil, ResumeState{}, err
+	}
+	if err := validateManifest(manifest); err != nil {
+		return nil, ResumeState{}, err
+	}
+	if manifest.Finalized {
+		return nil, ResumeState{}, fmt.Errorf("cannot append to finalized dataset")
+	}
+	if err := rejectSymlinks(root); err != nil {
+		return nil, ResumeState{}, err
+	}
+	logPath := filepath.Join(root, "events.bin")
+	file, err := os.OpenFile(logPath, os.O_RDWR, 0)
+	if err != nil {
+		return nil, ResumeState{}, err
+	}
+	state := validationState{manifest: manifest, tip: manifest.InitialAnchor, nextSequence: manifest.FirstEventSequence, observed: map[string]BlockRef{}, canonical: map[uint64]BlockRef{}}
+	_, incomplete, offset, err := scanFrames(file, ScanOptions{MaxPayloadBytes: manifest.Limits.MaxEventPayloadBytes, AllowIncompleteTail: true}, func(event EventEnvelope) error { return validateEvent(root, &state, event) })
+	if err != nil {
+		file.Close()
+		return nil, ResumeState{}, err
+	}
+	if incomplete {
+		if err := file.Truncate(offset); err != nil {
+			file.Close()
+			return nil, ResumeState{}, err
+		}
+		if err := file.Sync(); err != nil {
+			file.Close()
+			return nil, ResumeState{}, err
+		}
+	}
+	if _, err := file.Seek(0, 2); err != nil {
+		file.Close()
+		return nil, ResumeState{}, err
+	}
+	canonical := make(map[uint64]BlockRef, len(state.canonical))
+	for height, block := range state.canonical {
+		canonical[height] = block
+	}
+	writer := &Writer{root: root, manifest: manifest, log: file, next: state.nextSequence, observed: state.observed}
+	return writer, ResumeState{Manifest: manifest, Tip: state.tip, Canonical: canonical, LastSequence: state.lastSequence}, nil
+}
+
+func (w *Writer) NextSequence() uint64 { return w.next }
+func (w *Writer) DatasetID() string    { return w.manifest.DatasetID }
 
 func (w *Writer) Append(kind string, payload any, recordedAt time.Time) (EventEnvelope, error) {
 	if w.closed {
@@ -85,6 +142,12 @@ func (w *Writer) ObserveBlock(raw []byte, height uint64, blockTime int64, record
 	key, _ := BlockContentKey(hash)
 	digest := sha256.Sum256(raw)
 	ref := BlockRef{Height: height, Hash: hash, ParentHash: parent, BlockTimeUnixSeconds: blockTime, ContentKey: key, RawPayloadSHA256: hex.EncodeToString(digest[:]), RawPayloadLength: uint64(len(raw))}
+	if existing, ok := w.observed[hash]; ok {
+		if existing != ref {
+			return BlockRef{}, fmt.Errorf("observed block %s metadata differs from existing record", hash)
+		}
+		return existing, nil
+	}
 	path := filepath.Join(w.root, filepath.FromSlash(key))
 	if err := writeBytesAtomic(path, raw); err != nil {
 		return BlockRef{}, err

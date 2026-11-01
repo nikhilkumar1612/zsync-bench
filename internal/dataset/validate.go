@@ -31,6 +31,7 @@ type validationState struct {
 	nextSequence    uint64
 	lastSequence    uint64
 	observed        map[string]BlockRef
+	canonical       map[uint64]BlockRef
 	finalEvent      *DatasetFinalizedEvent
 	disconnectDepth uint64
 }
@@ -53,7 +54,7 @@ func Validate(root string) (ValidationReport, error) {
 		return ValidationReport{}, fmt.Errorf("open event log: %w", err)
 	}
 	defer logFile.Close()
-	state := validationState{manifest: manifest, tip: manifest.InitialAnchor, nextSequence: manifest.FirstEventSequence, observed: map[string]BlockRef{}}
+	state := validationState{manifest: manifest, tip: manifest.InitialAnchor, nextSequence: manifest.FirstEventSequence, observed: map[string]BlockRef{}, canonical: map[uint64]BlockRef{}}
 	count, incomplete, err := ScanFrames(logFile, ScanOptions{MaxPayloadBytes: manifest.Limits.MaxEventPayloadBytes, AllowIncompleteTail: !manifest.Finalized}, func(event EventEnvelope) error {
 		return validateEvent(root, &state, event)
 	})
@@ -127,6 +128,7 @@ func validateEvent(root string, state *validationState, event EventEnvelope) err
 			return fmt.Errorf("event %d cannot connect block %d:%s to tip %d:%s", event.Sequence, value.Block.Height, value.Block.Hash, state.tip.Height, state.tip.Hash)
 		}
 		state.tip = ChainTip{Height: value.Block.Height, Hash: value.Block.Hash}
+		state.canonical[value.Block.Height] = value.Block
 	case "block_disconnected":
 		var value BlockEvent
 		if err := strictJSON(event.Payload, &value); err != nil {
@@ -146,6 +148,7 @@ func validateEvent(root string, state *validationState, event EventEnvelope) err
 		if state.disconnectDepth > state.manifest.Limits.MaxReorgDepth {
 			return fmt.Errorf("event %d exceeds maximum reorganization depth %d", event.Sequence, state.manifest.Limits.MaxReorgDepth)
 		}
+		delete(state.canonical, value.Block.Height)
 		state.tip = ChainTip{Height: value.Block.Height - 1, Hash: value.Block.ParentHash}
 	case "tip_changed":
 		var value TipEvent

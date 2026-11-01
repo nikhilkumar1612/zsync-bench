@@ -159,6 +159,9 @@ Verification:
 - Represent an injected reorganization correctly.
 - Produce a dataset accepted by the validator.
 
+Status: implementation complete and locally verified with a scriptable Zebra
+JSON-RPC server. Live Testnet tip-following validation remains before acceptance.
+
 ## Work item 4: Replay harness and event transport
 
 Implement the Go replay harness using a framed stdin/stdout protocol.

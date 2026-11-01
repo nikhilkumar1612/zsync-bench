@@ -29,8 +29,12 @@ Work Item 1, the system and benchmark contract, is accepted as version 1.0:
 - [Benchmark specification](docs/benchmark-spec.md)
 
 Work Item 2, the versioned dataset and immutable event-log format, is accepted
-as version 1.0. See [Dataset Format v1](docs/dataset-format.md). The next
-milestone is Work Item 3: the Zebra Testnet recorder.
+as version 1.0. See [Dataset Format v1](docs/dataset-format.md).
+
+Work Item 3, the [Zebra Testnet recorder](docs/recorder.md), is implemented and
+passes local conformance tests for capture, restart, reorganization, and source
+recovery. A live Zebra Testnet tip-following smoke test remains before this work
+item is accepted.
 
 ## Initial scope
 

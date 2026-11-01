@@ -96,53 +96,60 @@ type ScanOptions struct {
 }
 
 func ScanFrames(r io.Reader, options ScanOptions, visit func(EventEnvelope) error) (uint64, bool, error) {
+	count, incomplete, _, err := scanFrames(r, options, visit)
+	return count, incomplete, err
+}
+
+func scanFrames(r io.Reader, options ScanOptions, visit func(EventEnvelope) error) (uint64, bool, int64, error) {
 	if err := ReadFileHeader(r); err != nil {
-		return 0, false, err
+		return 0, false, 0, err
 	}
 	reader := bufio.NewReader(r)
 	var count uint64
+	offset := int64(fileHeaderSize)
 	for {
 		var header [frameHeaderSize]byte
 		n, err := io.ReadFull(reader, header[:])
 		if errors.Is(err, io.EOF) && n == 0 {
-			return count, false, nil
+			return count, false, offset, nil
 		}
 		if err != nil {
 			if options.AllowIncompleteTail && errors.Is(err, io.ErrUnexpectedEOF) {
-				return count, true, nil
+				return count, true, offset, nil
 			}
-			return count, false, fmt.Errorf("read frame header after %d events: %w", count, err)
+			return count, false, offset, fmt.Errorf("read frame header after %d events: %w", count, err)
 		}
 		length := binary.LittleEndian.Uint32(header[:4])
 		sequence := binary.LittleEndian.Uint64(header[4:12])
 		if length > options.MaxPayloadBytes {
-			return count, false, fmt.Errorf("event %d payload length %d exceeds limit %d", sequence, length, options.MaxPayloadBytes)
+			return count, false, offset, fmt.Errorf("event %d payload length %d exceeds limit %d", sequence, length, options.MaxPayloadBytes)
 		}
 		body := make([]byte, int(length)+frameDigestSize)
 		if _, err := io.ReadFull(reader, body); err != nil {
 			if options.AllowIncompleteTail && errors.Is(err, io.ErrUnexpectedEOF) {
-				return count, true, nil
+				return count, true, offset, nil
 			}
-			return count, false, fmt.Errorf("read event %d body: %w", sequence, err)
+			return count, false, offset, fmt.Errorf("read event %d body: %w", sequence, err)
 		}
 		payload, wantDigest := body[:length], body[length:]
 		digest := sha256.New()
 		digest.Write(header[:])
 		digest.Write(payload)
 		if !equalBytes(digest.Sum(nil), wantDigest) {
-			return count, false, fmt.Errorf("event %d frame digest mismatch", sequence)
+			return count, false, offset, fmt.Errorf("event %d frame digest mismatch", sequence)
 		}
 		var event EventEnvelope
 		if err := strictJSON(payload, &event); err != nil {
-			return count, false, fmt.Errorf("decode event %d: %w", sequence, err)
+			return count, false, offset, fmt.Errorf("decode event %d: %w", sequence, err)
 		}
 		if event.Sequence != sequence {
-			return count, false, fmt.Errorf("frame sequence %d does not match envelope sequence %d", sequence, event.Sequence)
+			return count, false, offset, fmt.Errorf("frame sequence %d does not match envelope sequence %d", sequence, event.Sequence)
 		}
 		if err := visit(event); err != nil {
-			return count, false, err
+			return count, false, offset, err
 		}
 		count++
+		offset += frameHeaderSize + int64(length) + frameDigestSize
 	}
 }
 
