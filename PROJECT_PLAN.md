@@ -185,12 +185,13 @@ Verification:
 - Live replay never exposes partial records.
 - Resume from an acknowledgement produces no gaps.
 
-Status: in progress. Protocol v1 framing and the fixed-dataset vertical slice
-are implemented with all three timing modes, bounded in-flight delivery,
-durable acknowledgements, run manifests, and process-level crash/resume tests.
-The finalized 50,000-block dataset has also completed an end-to-end diagnostic
-replay of all 100,004 events. Growing-log follow, deterministic pause,
-start-by-height, and heartbeat behavior remain.
+Status: implementation complete and under final acceptance verification.
+Protocol v1 includes all three timing modes, bounded in-flight delivery,
+durable acknowledgements, run manifests, crash resume, growing-log follow,
+heartbeats, deterministic pause, and start-by-height. Tests prove incomplete
+tail frames are withheld and repeated fixed runs are identical. The finalized
+50,000-block dataset completed an end-to-end diagnostic replay of all 100,004
+events.
 
 ## Work item 5: Compact-block specification and fixtures
 

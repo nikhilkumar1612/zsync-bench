@@ -36,11 +36,12 @@ passes local conformance tests for capture, restart, reorganization, and source
 recovery. A live Zebra Testnet tip-following smoke test remains before this work
 item is accepted.
 
-Work Item 4 is in progress. The [Replay Transport Protocol v1](docs/replay-protocol.md)
-and fixed-dataset replay path now provide handshake negotiation, recorded,
-accelerated, and maximum-throughput timing, bounded in-flight delivery, durable
-acknowledgement progress, run manifests, and restart from the acknowledged
-sequence. Live follow and start-by-height remain.
+Work Item 4 is implemented and under final acceptance verification. The
+[Replay Transport Protocol v1](docs/replay-protocol.md) provides handshake
+negotiation, recorded, accelerated, and maximum-throughput timing, fixed and
+growing-log replay, bounded in-flight delivery, heartbeats, deterministic
+pause, start-by-height, durable acknowledgement progress, run manifests, and
+restart from the acknowledged sequence.
 
 ## Initial scope
 

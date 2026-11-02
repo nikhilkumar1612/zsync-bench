@@ -95,6 +95,70 @@ type ScanOptions struct {
 	AllowIncompleteTail bool
 }
 
+// FrameReader incrementally reads committed event frames from a seekable log.
+// If the current tail is incomplete, Next restores the frame start so a later
+// call can retry after the recorder appends the remaining bytes.
+type FrameReader struct {
+	reader io.ReadSeeker
+}
+
+func NewFrameReader(reader io.ReadSeeker) (*FrameReader, error) {
+	if _, err := reader.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	if err := ReadFileHeader(reader); err != nil {
+		return nil, err
+	}
+	return &FrameReader{reader: reader}, nil
+}
+
+func (r *FrameReader) Next(maxPayloadBytes uint32) (EventEnvelope, error) {
+	start, err := r.reader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return EventEnvelope{}, err
+	}
+	var header [frameHeaderSize]byte
+	n, err := io.ReadFull(r.reader, header[:])
+	if errors.Is(err, io.EOF) && n == 0 {
+		return EventEnvelope{}, io.EOF
+	}
+	if err != nil {
+		_, _ = r.reader.Seek(start, io.SeekStart)
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			return EventEnvelope{}, ErrIncompleteTail
+		}
+		return EventEnvelope{}, err
+	}
+	length := binary.LittleEndian.Uint32(header[:4])
+	sequence := binary.LittleEndian.Uint64(header[4:12])
+	if length > maxPayloadBytes {
+		return EventEnvelope{}, fmt.Errorf("event %d payload length %d exceeds limit %d", sequence, length, maxPayloadBytes)
+	}
+	body := make([]byte, int(length)+frameDigestSize)
+	if _, err := io.ReadFull(r.reader, body); err != nil {
+		_, _ = r.reader.Seek(start, io.SeekStart)
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return EventEnvelope{}, ErrIncompleteTail
+		}
+		return EventEnvelope{}, err
+	}
+	payload, wantDigest := body[:length], body[length:]
+	digest := sha256.New()
+	digest.Write(header[:])
+	digest.Write(payload)
+	if !equalBytes(digest.Sum(nil), wantDigest) {
+		return EventEnvelope{}, fmt.Errorf("event %d frame digest mismatch", sequence)
+	}
+	var event EventEnvelope
+	if err := strictJSON(payload, &event); err != nil {
+		return EventEnvelope{}, fmt.Errorf("decode event %d: %w", sequence, err)
+	}
+	if event.Sequence != sequence {
+		return EventEnvelope{}, fmt.Errorf("frame sequence %d does not match envelope sequence %d", sequence, event.Sequence)
+	}
+	return event, nil
+}
+
 func ScanFrames(r io.Reader, options ScanOptions, visit func(EventEnvelope) error) (uint64, bool, error) {
 	count, incomplete, _, err := scanFrames(r, options, visit)
 	return count, incomplete, err

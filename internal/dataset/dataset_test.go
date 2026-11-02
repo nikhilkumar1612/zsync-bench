@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -9,6 +10,53 @@ import (
 	"testing"
 	"time"
 )
+
+func TestFrameReaderWaitsForCompleteTail(t *testing.T) {
+	var complete bytes.Buffer
+	if err := WriteFileHeader(&complete); err != nil {
+		t.Fatal(err)
+	}
+	event, err := NewEnvelope(testDatasetID, 0, testTime.UnixNano(), "source_started", SourceStartedEvent{SessionID: "s", RecorderVersion: "test", ZebraEndpointID: "fixture"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFrame(&complete, event); err != nil {
+		t.Fatal(err)
+	}
+	data := complete.Bytes()
+	cut := len(data) - 10
+	path := filepath.Join(t.TempDir(), "events.bin")
+	if err := os.WriteFile(path, data[:cut], 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	reader, err := NewFrameReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.Next(1 << 20); err != ErrIncompleteTail {
+		t.Fatalf("got %v, want incomplete tail", err)
+	}
+	appendFile, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := appendFile.Write(data[cut:]); err != nil {
+		t.Fatal(err)
+	}
+	appendFile.Close()
+	got, err := reader.Next(1 << 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Sequence != 0 || got.Kind != "source_started" {
+		t.Fatalf("unexpected event: %+v", got)
+	}
+}
 
 var (
 	testDatasetID = "123e4567-e89b-12d3-a456-426614174000"

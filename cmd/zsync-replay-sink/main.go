@@ -34,7 +34,7 @@ func main() {
 		fail(encoder, "handshake_decode", err)
 	}
 	handshake, ok := message.(*replay.Handshake)
-	if !ok || handshake.ProtocolMajor != replay.ProtocolMajor || handshake.EventSchemaMajor != 1 || handshake.Network != "zcash-testnet" {
+	if !ok || handshake.ProtocolMajor != replay.ProtocolMajor || handshake.ProtocolMinor > replay.ProtocolMinor || handshake.EventSchemaMajor != 1 || handshake.EventSchemaMinor > 0 || handshake.Network != "zcash-testnet" {
 		fail(encoder, "handshake_unsupported", fmt.Errorf("unsupported handshake"))
 	}
 	if err := verifyStart(*statePath, handshake); err != nil {
@@ -70,6 +70,16 @@ func main() {
 		case *replay.EndMessage:
 			if expected == handshake.RequestedSequence || value.FinalSequence != last {
 				fail(encoder, "end_mismatch", fmt.Errorf("unexpected final sequence"))
+			}
+			if pending > 0 {
+				persistAndAck(encoder, *statePath, handshake.DatasetID, last)
+			}
+			return
+		case *replay.HeartbeatMessage:
+			continue
+		case *replay.StopMessage:
+			if expected == handshake.RequestedSequence || value.LastSequence != last {
+				fail(encoder, "stop_mismatch", fmt.Errorf("unexpected stop sequence"))
 			}
 			if pending > 0 {
 				persistAndAck(encoder, *statePath, handshake.DatasetID, last)

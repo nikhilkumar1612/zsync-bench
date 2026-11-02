@@ -44,6 +44,17 @@ type EndMessage struct {
 	FinalSequence uint64 `json:"final_sequence"`
 }
 
+type HeartbeatMessage struct {
+	Type          string `json:"type"`
+	SentUnixNanos int64  `json:"sent_unix_nanos"`
+}
+
+type StopMessage struct {
+	Type         string `json:"type"`
+	Reason       string `json:"reason"`
+	LastSequence uint64 `json:"last_sequence"`
+}
+
 type ReadyMessage struct {
 	Type          string `json:"type"`
 	ProtocolMajor uint32 `json:"protocol_major"`
@@ -174,6 +185,10 @@ func (d *Decoder) DecodeRequest() (any, error) {
 		value = &EventMessage{}
 	case "end":
 		value = &EndMessage{}
+	case "heartbeat":
+		value = &HeartbeatMessage{}
+	case "stop":
+		value = &StopMessage{}
 	default:
 		return nil, fmt.Errorf("unsupported replay message type %q", kind.Type)
 	}

@@ -1,6 +1,6 @@
 # Replay Transport Protocol v1
 
-Status: Work Item 4 draft; fixed-dataset transport implemented.
+Status: Implemented; acceptance verification in progress.
 
 The replay harness launches one consumer process. Replay writes protocol frames
 to the child's standard input, the consumer writes protocol frames to standard
@@ -61,14 +61,32 @@ consumers must therefore apply identical duplicate sequences idempotently.
 command, timing configuration, starting sequence, final acknowledgement,
 timestamps, and completion status.
 
+## Growing datasets and pause
+
+`--follow` accepts a growing Dataset Format v1 log. Replay retains its byte
+offset, waits at end-of-file or an incomplete tail, and retries that same frame
+after the recorder commits more bytes. An incomplete frame is never delivered.
+While idle, replay sends `heartbeat` messages at the configured interval.
+
+`--stop-after-events N` sends `stop(reason=configured_pause)` after exactly N
+delivered events. Replay then persists the consumer's final cumulative
+acknowledgement and records a paused run manifest. A subsequent `--resume`
+starts at the following sequence.
+
+`--start-height H` resolves to the `block_observed` event for the first block
+that is subsequently connected at height H. This includes any immutable block
+publication needed before the corresponding chain transition. Start height,
+explicit start sequence, and resume position are mutually exclusive.
+
 ## Implemented verification
 
 Automated process-level tests cover handshake negotiation, ordered fixed replay,
 frame-size rejection, cumulative durable progress, injected consumer failure,
 and restart from the last persisted acknowledgement.
 
-Remaining Work Item 4 scope includes growing-log follow mode, deterministic
-pause controls, start-by-height selection, and heartbeats.
+Automated verification covers growing-log follow, incomplete-tail withholding,
+idle heartbeats, deterministic pause, start-by-height, crash resume, repeated
+fixed-run identity, and exact recorded/accelerated/maximum timing calculations.
 
 ## Diagnostic fixed replay
 
