@@ -38,6 +38,8 @@ type Recorder struct {
 
 var errReevaluate = errors.New("source recovered; re-evaluate canonical chain")
 
+const publicTestnetGenesisHash = "05a60a92d99d85997cce3b87616c089f6124d7342af37106edc76126334a2c38"
+
 type runState struct {
 	writer    *dataset.Writer
 	tip       dataset.ChainTip
@@ -83,7 +85,7 @@ func (r *Recorder) Run(ctx context.Context) error {
 			}
 			return fmt.Errorf("refresh Zebra tip: %w", err)
 		}
-		if err := validateSource(info); err != nil {
+		if err := validateSourceIdentity(info); err != nil {
 			return err
 		}
 		target := info.Blocks
@@ -137,7 +139,11 @@ func (r *Recorder) open(ctx context.Context) (*runState, error) {
 			writer.Close()
 			return nil, fmt.Errorf("inspect Zebra chain: %w", err)
 		}
-		if err := validateSource(info); err != nil {
+		if err := r.validateSourceForMode(info); err != nil {
+			writer.Close()
+			return nil, err
+		}
+		if err := r.verifyPublicTestnet(ctx); err != nil {
 			writer.Close()
 			return nil, err
 		}
@@ -145,17 +151,33 @@ func (r *Recorder) open(ctx context.Context) (*runState, error) {
 			writer.Close()
 			return nil, fmt.Errorf("Zebra tip %d is behind dataset anchor %d", info.Blocks, resumed.Manifest.InitialAnchor.Height)
 		}
+		if err := validateRetainedRange(info, resumed.Tip.Height+1); err != nil {
+			writer.Close()
+			return nil, err
+		}
 		return &runState{writer: writer, tip: resumed.Tip, anchor: resumed.Manifest.InitialAnchor, canonical: resumed.Canonical}, nil
 	}
 	info, err := r.source.GetBlockchainInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("inspect Zebra chain: %w", err)
 	}
-	if err := validateSource(info); err != nil {
+	if err := r.validateSourceForMode(info); err != nil {
+		return nil, err
+	}
+	if err := r.verifyPublicTestnet(ctx); err != nil {
 		return nil, err
 	}
 	if info.Blocks < r.config.StartHeight-1 {
 		return nil, fmt.Errorf("start height %d is beyond Zebra tip %d", r.config.StartHeight, info.Blocks)
+	}
+	if err := validateRetainedRange(info, r.config.StartHeight); err != nil {
+		return nil, err
+	}
+	if !r.config.Follow {
+		lastHeight := r.config.StartHeight + r.config.MaxBlocks - 1
+		if lastHeight < r.config.StartHeight || lastHeight > info.Blocks {
+			return nil, fmt.Errorf("requested fixed range ends at %d, but Zebra has committed through %d", lastHeight, info.Blocks)
+		}
 	}
 	anchorHash, err := r.source.GetBlockHash(ctx, r.config.StartHeight-1)
 	if err != nil {
@@ -170,11 +192,54 @@ func (r *Recorder) open(ctx context.Context) (*runState, error) {
 }
 
 func validateSource(info zebra.BlockchainInfo) error {
+	if err := validateSourceIdentity(info); err != nil {
+		return err
+	}
+	if info.InitialBlockDownloadComplete != nil && !*info.InitialBlockDownloadComplete {
+		return fmt.Errorf("Zebra initial block download is incomplete")
+	}
+	if info.InitialBlockDownloadComplete == nil {
+		if info.Headers == nil || info.VerificationProgress == nil {
+			return fmt.Errorf("Zebra readiness fields are unavailable")
+		}
+		if *info.VerificationProgress < 0.999 {
+			return fmt.Errorf("Zebra verification progress %.6f is below 0.999", *info.VerificationProgress)
+		}
+		if *info.Headers > info.Blocks+100 {
+			return fmt.Errorf("Zebra committed tip is %d blocks behind headers", *info.Headers-info.Blocks)
+		}
+	}
+	return nil
+}
+
+func (r *Recorder) validateSourceForMode(info zebra.BlockchainInfo) error {
+	if r.config.Follow {
+		return validateSource(info)
+	}
+	return validateSourceIdentity(info)
+}
+
+func validateRetainedRange(info zebra.BlockchainInfo, startHeight uint64) error {
+	if info.Pruned && info.PruneHeight != nil && startHeight < *info.PruneHeight {
+		return fmt.Errorf("requested start height %d is below Zebra prune height %d", startHeight, *info.PruneHeight)
+	}
+	return nil
+}
+
+func validateSourceIdentity(info zebra.BlockchainInfo) error {
 	if info.Chain != "test" {
 		return fmt.Errorf("Zebra network is %q, want test", info.Chain)
 	}
-	if !info.InitialBlockDownloadComplete {
-		return fmt.Errorf("Zebra initial block download is incomplete")
+	return nil
+}
+
+func (r *Recorder) verifyPublicTestnet(ctx context.Context) error {
+	genesis, err := r.source.GetBlockHash(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("fetch Testnet genesis hash: %w", err)
+	}
+	if genesis != publicTestnetGenesisHash {
+		return fmt.Errorf("Zebra genesis hash %s is not the public Zcash Testnet genesis", genesis)
 	}
 	return nil
 }

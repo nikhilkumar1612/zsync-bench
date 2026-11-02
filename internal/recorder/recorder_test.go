@@ -63,6 +63,66 @@ func TestRecorderCanPauseGrowingDataset(t *testing.T) {
 	}
 }
 
+func TestRecorderRejectsConfiguredTestChain(t *testing.T) {
+	chain := testzebra.LinearChain(20, strings.Repeat("0", 64), 2, 1000)
+	server := testzebra.New(chain)
+	defer server.Close()
+	server.SetGenesisHash(strings.Repeat("1", 64))
+	config := recorder.DefaultConfig()
+	config.OutputDir = t.TempDir() + "/dataset"
+	config.StartHeight = 21
+	config.MaxBlocks = 1
+	err := recorder.New(config, newSource(t, server.URL()), discardLogger()).Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "not the public Zcash Testnet genesis") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFixedCaptureAcceptsPartiallySyncedSource(t *testing.T) {
+	chain := testzebra.LinearChain(100, strings.Repeat("0", 64), 3, 1000)
+	server := testzebra.New(chain)
+	defer server.Close()
+	server.SetSyncState(1000, 0.25)
+	config := recorder.DefaultConfig()
+	config.OutputDir = t.TempDir() + "/dataset"
+	config.StartHeight = 101
+	config.MaxBlocks = 1
+	if err := recorder.New(config, newSource(t, server.URL()), discardLogger()).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFollowRejectsPartiallySyncedSource(t *testing.T) {
+	chain := testzebra.LinearChain(100, strings.Repeat("0", 64), 3, 1000)
+	server := testzebra.New(chain)
+	defer server.Close()
+	server.SetSyncState(1000, 0.25)
+	config := recorder.DefaultConfig()
+	config.OutputDir = t.TempDir() + "/dataset"
+	config.StartHeight = 101
+	config.MaxBlocks = 1
+	config.Follow = true
+	err := recorder.New(config, newSource(t, server.URL()), discardLogger()).Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "verification progress") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFixedCaptureRejectsPrunedRange(t *testing.T) {
+	chain := testzebra.LinearChain(100, strings.Repeat("0", 64), 3, 1000)
+	server := testzebra.New(chain)
+	defer server.Close()
+	server.SetPruning(102)
+	config := recorder.DefaultConfig()
+	config.OutputDir = t.TempDir() + "/dataset"
+	config.StartHeight = 101
+	config.MaxBlocks = 1
+	err := recorder.New(config, newSource(t, server.URL()), discardLogger()).Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "below Zebra prune height") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRecorderResumesAtCommittedBoundary(t *testing.T) {
 	chain := testzebra.LinearChain(100, strings.Repeat("0", 64), 6, 1000)
 	server := testzebra.New(chain)

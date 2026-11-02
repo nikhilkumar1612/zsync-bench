@@ -19,6 +19,11 @@ go run ./cmd/zsync-recorder record \
   --shutdown-mode finalize
 ```
 
+A bounded fixed capture may use a partially synchronized public-Testnet node
+when its entire requested range is already committed and retained. Follow mode
+still requires the source to be at or near the network tip. On pruned nodes,
+the requested start height must not be below the RPC-reported `pruneheight`.
+
 Follow Testnet and leave a growing dataset on shutdown:
 
 ```sh
@@ -44,7 +49,12 @@ If authentication is enabled, pass `--rpc-user` and set the password in
 
 ## Correctness and recovery
 
-- The recorder accepts only Zebra's `test` chain after initial block download.
+- The recorder accepts only the public Zcash Testnet. It verifies the canonical
+  Testnet genesis hash, so a configured development chain that also reports
+  `chain: test` is rejected.
+- Older nodes may report `initial_block_download_complete`. Zakura and current
+  Zebra responses are accepted without that optional field when header lag is
+  bounded and verification progress indicates that initial sync is complete.
 - It resolves a height to a hash, fetches the raw block by that hash, and checks
   the parsed hash and parent before publishing it.
 - On a reorganization, replacement block objects become durable first. The log

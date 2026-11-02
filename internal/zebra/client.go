@@ -36,10 +36,15 @@ type Client struct {
 }
 
 type BlockchainInfo struct {
-	Chain                        string `json:"chain"`
-	Blocks                       uint64 `json:"blocks"`
-	BestBlockHash                string `json:"bestblockhash"`
-	InitialBlockDownloadComplete bool   `json:"initial_block_download_complete"`
+	Chain                        string   `json:"chain"`
+	Blocks                       uint64   `json:"blocks"`
+	Headers                      *uint64  `json:"headers,omitempty"`
+	EstimatedHeight              *uint64  `json:"estimatedheight,omitempty"`
+	VerificationProgress         *float64 `json:"verificationprogress,omitempty"`
+	BestBlockHash                string   `json:"bestblockhash"`
+	Pruned                       bool     `json:"pruned"`
+	PruneHeight                  *uint64  `json:"pruneheight,omitempty"`
+	InitialBlockDownloadComplete *bool    `json:"initial_block_download_complete,omitempty"`
 }
 
 type RPCError struct {
@@ -81,9 +86,15 @@ func New(config Config) (*Client, error) {
 }
 
 func (c *Client) GetBlockchainInfo(ctx context.Context) (BlockchainInfo, error) {
-	var result BlockchainInfo
-	if err := c.call(ctx, "getblockchaininfo", []any{}, &result); err != nil {
+	// Zebra and Zakura expose additional implementation-specific fields in this
+	// response, so decode only the readiness subset and allow unknown fields.
+	var raw json.RawMessage
+	if err := c.callRaw(ctx, "getblockchaininfo", []any{}, &raw); err != nil {
 		return BlockchainInfo{}, err
+	}
+	var result BlockchainInfo
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return BlockchainInfo{}, fmt.Errorf("decode getblockchaininfo result: %w", err)
 	}
 	if result.Chain == "" || result.BestBlockHash == "" {
 		return BlockchainInfo{}, fmt.Errorf("getblockchaininfo returned incomplete chain identity")

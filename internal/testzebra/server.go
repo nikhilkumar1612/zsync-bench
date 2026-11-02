@@ -18,16 +18,21 @@ type Block struct {
 	Raw        []byte
 }
 type Server struct {
-	mu       sync.RWMutex
-	http     *httptest.Server
-	chain    []Block
-	byHash   map[string]Block
-	requests map[string]int
-	failures map[string]int
+	mu           sync.RWMutex
+	http         *httptest.Server
+	chain        []Block
+	byHash       map[string]Block
+	requests     map[string]int
+	failures     map[string]int
+	genesis      string
+	headersAhead uint64
+	progress     float64
+	pruned       bool
+	pruneHeight  *uint64
 }
 
 func New(chain []Block) *Server {
-	s := &Server{chain: append([]Block(nil), chain...), requests: map[string]int{}, failures: map[string]int{}}
+	s := &Server{chain: append([]Block(nil), chain...), requests: map[string]int{}, failures: map[string]int{}, genesis: "05a60a92d99d85997cce3b87616c089f6124d7342af37106edc76126334a2c38", progress: 1}
 	s.reindex()
 	s.http = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -49,6 +54,23 @@ func (s *Server) FailNext(method string, count int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures[method] += count
+}
+func (s *Server) SetGenesisHash(hash string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.genesis = hash
+}
+func (s *Server) SetSyncState(headersAhead uint64, progress float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.headersAhead = headersAhead
+	s.progress = progress
+}
+func (s *Server) SetPruning(pruneHeight uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruned = true
+	s.pruneHeight = &pruneHeight
 }
 func (s *Server) reindex() {
 	s.byHash = map[string]Block{}
@@ -103,7 +125,11 @@ func (s *Server) dispatch(request rpcRequest) (any, int, string) {
 	switch request.Method {
 	case "getblockchaininfo":
 		tip := s.chain[len(s.chain)-1]
-		return map[string]any{"chain": "test", "blocks": tip.Height, "bestblockhash": tip.Hash, "initial_block_download_complete": true}, 0, ""
+		result := map[string]any{"chain": "test", "blocks": tip.Height, "headers": tip.Height + s.headersAhead, "estimatedheight": tip.Height + s.headersAhead, "verificationprogress": s.progress, "bestblockhash": tip.Hash, "pruned": s.pruned, "zakura_extension": true}
+		if s.pruneHeight != nil {
+			result["pruneheight"] = *s.pruneHeight
+		}
+		return result, 0, ""
 	case "getblockhash":
 		if len(request.Params) != 1 {
 			return nil, -32602, "invalid params"
@@ -116,6 +142,9 @@ func (s *Server) dispatch(request rpcRequest) (any, int, string) {
 			if block.Height == height {
 				return block.Hash, 0, ""
 			}
+		}
+		if height == 0 {
+			return s.genesis, 0, ""
 		}
 		return nil, -8, "height out of range"
 	case "getblock":

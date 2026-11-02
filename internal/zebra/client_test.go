@@ -23,7 +23,7 @@ func TestClientReadsZebraResponses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Chain != "test" || info.Blocks != 11 || info.BestBlockHash != chain[1].Hash {
+	if info.Chain != "test" || info.Blocks != 11 || info.BestBlockHash != chain[1].Hash || info.Headers == nil || *info.Headers != 11 || info.VerificationProgress == nil || *info.VerificationProgress != 1 || info.InitialBlockDownloadComplete != nil {
 		t.Fatalf("unexpected info: %+v", info)
 	}
 	hash, err := client.GetBlockHash(context.Background(), 10)
