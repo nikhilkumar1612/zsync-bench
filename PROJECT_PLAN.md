@@ -185,6 +185,13 @@ Verification:
 - Live replay never exposes partial records.
 - Resume from an acknowledgement produces no gaps.
 
+Status: in progress. Protocol v1 framing and the fixed-dataset vertical slice
+are implemented with all three timing modes, bounded in-flight delivery,
+durable acknowledgements, run manifests, and process-level crash/resume tests.
+The finalized 50,000-block dataset has also completed an end-to-end diagnostic
+replay of all 100,004 events. Growing-log follow, deterministic pause,
+start-by-height, and heartbeat behavior remain.
+
 ## Work item 5: Compact-block specification and fixtures
 
 Pin the canonical light-wallet protocol revision and specify raw-block to

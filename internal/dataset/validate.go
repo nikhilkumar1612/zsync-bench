@@ -75,6 +75,22 @@ func Validate(root string) (ValidationReport, error) {
 	return ValidationReport{DatasetID: manifest.DatasetID, Finalized: manifest.Finalized, EventCount: count, LastSequence: state.lastSequence, FinalTip: state.tip, BlockObjectCount: uint64(len(state.observed)), IncompleteTail: incomplete}, nil
 }
 
+// LoadManifest loads and validates the public dataset metadata. Call Validate
+// when event, block-object, and finalization integrity must also be checked.
+func LoadManifest(root string) (Manifest, error) {
+	manifest, err := readManifest(filepath.Join(root, "manifest.json"))
+	if err != nil {
+		return Manifest{}, err
+	}
+	if err := validateManifest(manifest); err != nil {
+		return Manifest{}, err
+	}
+	if err := rejectSymlinks(root); err != nil {
+		return Manifest{}, err
+	}
+	return manifest, nil
+}
+
 func validateEvent(root string, state *validationState, event EventEnvelope) error {
 	if state.finalEvent != nil {
 		return fmt.Errorf("event %d appears after dataset_finalized", event.Sequence)
